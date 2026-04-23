@@ -1,311 +1,237 @@
-import { ScrollView, Text, View, TouchableOpacity, RefreshControl, StyleSheet } from "react-native";
-import { useEffect, useState } from "react";
-import { useRouter } from "expo-router";
+import { ScrollView, Text, View, TouchableOpacity, Dimensions } from "react-native";
+import { useState, useEffect } from "react";
 import * as Haptics from "expo-haptics";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
+import { getTotalBalance, generateTrialBalance } from "@/lib/accounting-storage";
 
-// Placeholder data structure (will be replaced with actual storage)
-interface Account {
-  id: string;
-  name: string;
-  type: "customer" | "agent" | "company";
-  balance: number;
-}
-
-interface Transaction {
-  id: string;
-  account: string;
-  amount: number;
-  currency: string;
-  type: "for_us" | "for_them";
-  statement: string;
-  date: string;
-}
-
-const styles = StyleSheet.create({
-  quickActionButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    borderRadius: 12,
-    padding: 16,
-  },
-});
+const { width } = Dimensions.get("window");
 
 export default function HomeScreen() {
-  const router = useRouter();
   const colors = useColors();
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [currencyBalances, setCurrencyBalances] = useState<Record<string, number>>({});
-  const [refreshing, setRefreshing] = useState(false);
+  const [totalBalance, setTotalBalance] = useState({
+    totalAssets: 0,
+    totalLiabilities: 0,
+    totalEquity: 0,
+  });
+  const [trialBalance, setTrialBalance] = useState<any>(null);
 
   useEffect(() => {
     loadData();
   }, []);
 
   const loadData = async () => {
-    // Placeholder data for demonstration
-    const demoAccounts: Account[] = [
-      { id: "1", name: "أحمد محمد", type: "customer", balance: 5000 },
-      { id: "2", name: "شركة النور", type: "company", balance: 15000 },
-      { id: "3", name: "علي الحسن", type: "agent", balance: 3000 },
-    ];
-
-    const demoTransactions: Transaction[] = [
-      {
-        id: "1",
-        account: "أحمد محمد",
-        amount: 1000,
-        currency: "SYP",
-        type: "for_us",
-        statement: "دفعة أولى",
-        date: "2026-04-22",
-      },
-      {
-        id: "2",
-        account: "شركة النور",
-        amount: 5000,
-        currency: "USD",
-        type: "for_them",
-        statement: "مشتريات",
-        date: "2026-04-21",
-      },
-    ];
-
-    setAccounts(demoAccounts);
-    setTransactions(demoTransactions);
-
-    // Calculate balances by currency
-    const balances: Record<string, number> = {};
-    demoTransactions.forEach((tx) => {
-      if (!balances[tx.currency]) {
-        balances[tx.currency] = 0;
-      }
-      balances[tx.currency] += tx.type === "for_us" ? tx.amount : -tx.amount;
-    });
-    setCurrencyBalances(balances);
+    const balance = await getTotalBalance();
+    const trial = await generateTrialBalance();
+    setTotalBalance(balance);
+    setTrialBalance(trial);
   };
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await loadData();
-    setRefreshing(false);
-  };
-
-  const handleQuickAction = (action: "transaction" | "account" | "statement") => {
+  const handleQuickAction = (action: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (action === "transaction") {
-      router.push("/(tabs)/add-transaction");
-    } else if (action === "account") {
-      router.push("/(tabs)/accounts");
-    } else if (action === "statement") {
-      router.push("/(tabs)/statement");
-    }
+    console.log("Action:", action);
   };
 
-  const recentTransactions = transactions.slice(-5).reverse();
-  const totalBalance = Object.values(currencyBalances).reduce((sum, bal) => sum + bal, 0);
+  const cardWidth = (width - 32) / 2;
 
   return (
     <ScreenContainer className="p-0">
       <ScrollView
         contentContainerStyle={{ flexGrow: 1 }}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        className="flex-1"
       >
-        <View className="flex-1">
-          {/* Header Section */}
-          <View className="bg-gradient-to-b from-primary/20 to-transparent px-4 pt-4 pb-6">
-            <View className="gap-1">
-              <Text className="text-3xl font-bold text-foreground">المحاسب</Text>
-              <Text className="text-sm text-muted">إدارة حساباتك المالية بسهولة</Text>
+        {/* Header Section */}
+        <View
+          className="px-4 pt-6 pb-4"
+          style={{
+            backgroundColor: colors.primary,
+          }}
+        >
+          <Text className="text-white text-sm font-semibold opacity-90">مرحباً بك في</Text>
+          <Text className="text-white text-3xl font-bold mt-1">المحاسب</Text>
+          <Text className="text-white/70 text-xs mt-2">إدارة حساباتك المالية بسهولة</Text>
+        </View>
+
+        {/* Balance Summary Cards */}
+        <View className="px-4 py-4 gap-3">
+          {/* Total Assets Card */}
+          <View
+            className="rounded-2xl p-4 border border-border"
+            style={{
+              backgroundColor: colors.surface,
+            }}
+          >
+            <View className="flex-row justify-between items-start">
+              <View className="flex-1">
+                <Text className="text-xs text-muted font-semibold mb-1">إجمالي الأصول</Text>
+                <Text className="text-2xl font-bold text-foreground">
+                  {totalBalance.totalAssets.toFixed(2)}
+                </Text>
+              </View>
+              <View
+                className="w-12 h-12 rounded-xl items-center justify-center"
+                style={{
+                  backgroundColor: colors.primary + "20",
+                }}
+              >
+                <Text className="text-xl">💰</Text>
+              </View>
             </View>
           </View>
 
-          {/* Main Content */}
-          <View className="px-4 gap-4 pb-4">
-            {/* Total Balance Card */}
+          {/* Liabilities & Equity Row */}
+          <View className="flex-row gap-3">
+            {/* Liabilities Card */}
             <View
-              className="rounded-2xl p-6 border border-border overflow-hidden"
-              style={{ backgroundColor: colors.surface }}
+              className="flex-1 rounded-2xl p-4 border border-border"
+              style={{
+                backgroundColor: colors.surface,
+              }}
             >
-              <Text className="text-sm text-muted mb-2">إجمالي الرصيد</Text>
-              <Text className="text-3xl font-bold text-foreground mb-4">
-                {totalBalance.toFixed(2)}
+              <Text className="text-xs text-muted font-semibold mb-2">الالتزامات</Text>
+              <Text className="text-xl font-bold text-error">
+                {totalBalance.totalLiabilities.toFixed(2)}
               </Text>
-              <Text className="text-xs text-muted">عملات متعددة</Text>
             </View>
 
-            {/* Currency Balances */}
-            {Object.keys(currencyBalances).length > 0 && (
-              <View className="gap-2">
-                <Text className="text-sm font-semibold text-foreground">الأرصدة حسب العملة</Text>
-                <View className="gap-2">
-                  {Object.entries(currencyBalances).map(([currency, balance]) => (
-                    <View
-                      key={currency}
-                      className="flex-row justify-between items-center rounded-xl p-3 border border-border"
-                      style={{ backgroundColor: colors.surface }}
-                    >
-                      <View>
-                        <Text className="text-xs text-muted mb-1">العملة</Text>
-                        <Text className="text-base font-semibold text-foreground">{currency}</Text>
-                      </View>
-                      <View className="items-end">
-                        <Text className="text-xs text-muted mb-1">الرصيد</Text>
-                        <Text
-                          className={`text-base font-bold ${
-                            balance >= 0 ? "text-success" : "text-error"
-                          }`}
-                        >
-                          {balance >= 0 ? "+" : ""}{balance.toFixed(2)}
-                        </Text>
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
+            {/* Equity Card */}
+            <View
+              className="flex-1 rounded-2xl p-4 border border-border"
+              style={{
+                backgroundColor: colors.surface,
+              }}
+            >
+              <Text className="text-xs text-muted font-semibold mb-2">حقوق الملكية</Text>
+              <Text className="text-xl font-bold text-success">
+                {totalBalance.totalEquity.toFixed(2)}
+              </Text>
+            </View>
+          </View>
+        </View>
 
-            {/* Quick Actions */}
-            <View className="gap-2">
-              <Text className="text-sm font-semibold text-foreground">اختصارات سريعة</Text>
-              <View className="gap-2">
-                <TouchableOpacity
-                  onPress={() => handleQuickAction("transaction")}
-                  activeOpacity={0.7}
-                  style={{
-                    backgroundColor: colors.primary,
-                  }}
-                  className="flex-row items-center gap-3 rounded-xl p-4"
-                >
-                  <Text className="text-lg">💳</Text>
-                  <View className="flex-1">
-                    <Text className="text-white font-semibold">إضافة معاملة</Text>
-                    <Text className="text-white/70 text-xs">تسجيل معاملة جديدة</Text>
-                  </View>
-                  <Text className="text-white text-lg">→</Text>
-                </TouchableOpacity>
+        {/* Quick Actions Section */}
+        <View className="px-4 py-2">
+          <Text className="text-sm font-semibold text-foreground mb-3">الإجراءات السريعة</Text>
+          <View className="flex-row flex-wrap gap-3 justify-between">
+            {/* Add Transaction Button */}
+            <TouchableOpacity
+              onPress={() => handleQuickAction("add-transaction")}
+              style={{
+                backgroundColor: colors.primary,
+                width: cardWidth,
+              }}
+              className="rounded-2xl p-4 active:opacity-80"
+            >
+              <Text className="text-2xl mb-2">💳</Text>
+              <Text className="text-white font-semibold text-sm">إضافة معاملة</Text>
+              <Text className="text-white/70 text-xs mt-1">تسجيل معاملة جديدة</Text>
+            </TouchableOpacity>
 
-                <TouchableOpacity
-                  onPress={() => handleQuickAction("account")}
-                  activeOpacity={0.7}
-                  style={{
-                    backgroundColor: colors.surface,
-                    borderColor: colors.border,
-                    borderWidth: 1,
-                  }}
-                  className="flex-row items-center gap-3 rounded-xl p-4"
-                >
-                  <Text className="text-lg">🏦</Text>
-                  <View className="flex-1">
-                    <Text className="text-foreground font-semibold">إضافة حساب</Text>
-                    <Text className="text-muted text-xs">إنشاء حساب جديد</Text>
-                  </View>
-                  <Text className="text-foreground text-lg">→</Text>
-                </TouchableOpacity>
+            {/* Add Account Button */}
+            <TouchableOpacity
+              onPress={() => handleQuickAction("add-account")}
+              style={{
+                backgroundColor: colors.success,
+                width: cardWidth,
+              }}
+              className="rounded-2xl p-4 active:opacity-80"
+            >
+              <Text className="text-2xl mb-2">🏦</Text>
+              <Text className="text-white font-semibold text-sm">إضافة حساب</Text>
+              <Text className="text-white/70 text-xs mt-1">إنشاء حساب جديد</Text>
+            </TouchableOpacity>
 
-                <TouchableOpacity
-                  onPress={() => handleQuickAction("statement")}
-                  activeOpacity={0.7}
-                  style={{
-                    backgroundColor: colors.surface,
-                    borderColor: colors.border,
-                    borderWidth: 1,
-                  }}
-                  className="flex-row items-center gap-3 rounded-xl p-4"
+            {/* View Statement Button */}
+            <TouchableOpacity
+              onPress={() => handleQuickAction("view-statement")}
+              style={{
+                backgroundColor: colors.warning,
+                width: cardWidth,
+              }}
+              className="rounded-2xl p-4 active:opacity-80"
+            >
+              <Text className="text-2xl mb-2">📊</Text>
+              <Text className="text-white font-semibold text-sm">عرض الكشف</Text>
+              <Text className="text-white/70 text-xs mt-1">كشف الحساب</Text>
+            </TouchableOpacity>
+
+            {/* Trial Balance Button */}
+            <TouchableOpacity
+              onPress={() => handleQuickAction("trial-balance")}
+              style={{
+                backgroundColor: colors.primary + "80",
+                width: cardWidth,
+              }}
+              className="rounded-2xl p-4 active:opacity-80"
+            >
+              <Text className="text-2xl mb-2">⚖️</Text>
+              <Text className="text-white font-semibold text-sm">ميزان المراجعة</Text>
+              <Text className="text-white/70 text-xs mt-1">التحقق من التوازن</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Recent Transactions Section */}
+        <View className="px-4 py-4">
+          <Text className="text-sm font-semibold text-foreground mb-3">آخر العمليات</Text>
+          <View
+            className="rounded-2xl p-4 border border-border items-center justify-center py-8"
+            style={{
+              backgroundColor: colors.surface,
+            }}
+          >
+            <Text className="text-3xl mb-2">📭</Text>
+            <Text className="text-sm text-muted">لا توجد عمليات حديثة</Text>
+          </View>
+        </View>
+
+        {/* Accounting Info Section */}
+        <View className="px-4 py-4 pb-6">
+          <Text className="text-xs font-semibold text-muted uppercase mb-3">معلومات محاسبية</Text>
+          <View
+            className="rounded-2xl p-4 border border-border gap-3"
+            style={{
+              backgroundColor: colors.surface,
+            }}
+          >
+            <View className="flex-row justify-between items-center">
+              <Text className="text-sm text-muted">معادلة المحاسبة</Text>
+              <Text className="text-xs font-mono text-foreground">
+                A = L + E
+              </Text>
+            </View>
+            <View className="border-t border-border pt-3 flex-row justify-between items-center">
+              <Text className="text-sm text-muted">حالة التوازن</Text>
+              <View
+                className={`px-3 py-1 rounded-full ${
+                  Math.abs(
+                    totalBalance.totalAssets -
+                      (totalBalance.totalLiabilities + totalBalance.totalEquity)
+                  ) < 0.01
+                    ? "bg-success/20"
+                    : "bg-error/20"
+                }`}
+              >
+                <Text
+                  className={`text-xs font-semibold ${
+                    Math.abs(
+                      totalBalance.totalAssets -
+                        (totalBalance.totalLiabilities + totalBalance.totalEquity)
+                    ) < 0.01
+                      ? "text-success"
+                      : "text-error"
+                  }`}
                 >
-                  <Text className="text-lg">📊</Text>
-                  <View className="flex-1">
-                    <Text className="text-foreground font-semibold">عرض الكشف</Text>
-                    <Text className="text-muted text-xs">كشف الحساب والمعاملات</Text>
-                  </View>
-                  <Text className="text-foreground text-lg">→</Text>
-                </TouchableOpacity>
+                  {Math.abs(
+                    totalBalance.totalAssets -
+                      (totalBalance.totalLiabilities + totalBalance.totalEquity)
+                  ) < 0.01
+                    ? "متوازن"
+                    : "غير متوازن"}
+                </Text>
               </View>
             </View>
-
-            {/* Recent Transactions */}
-            {recentTransactions.length > 0 && (
-              <View className="gap-2">
-                <View className="flex-row justify-between items-center">
-                  <Text className="text-sm font-semibold text-foreground">آخر المعاملات</Text>
-                  <TouchableOpacity onPress={() => handleQuickAction("statement")}>
-                    <Text className="text-xs text-primary">عرض الكل</Text>
-                  </TouchableOpacity>
-                </View>
-                <View className="gap-2">
-                  {recentTransactions.map((transaction) => (
-                    <View
-                      key={transaction.id}
-                      className="flex-row justify-between items-center rounded-xl p-3 border border-border"
-                      style={{ backgroundColor: colors.surface }}
-                    >
-                      <View className="flex-1">
-                        <Text className="text-sm font-semibold text-foreground">
-                          {transaction.statement}
-                        </Text>
-                        <Text className="text-xs text-muted mt-1">
-                          {transaction.account} • {transaction.type === "for_us" ? "لنا" : "لهم"}
-                        </Text>
-                      </View>
-                      <View className="items-end">
-                        <Text
-                          className={`text-sm font-bold ${
-                            transaction.type === "for_us" ? "text-success" : "text-error"
-                          }`}
-                        >
-                          {transaction.type === "for_us" ? "+" : "-"}
-                          {transaction.amount}
-                        </Text>
-                        <Text className="text-xs text-muted mt-1">{transaction.currency}</Text>
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
-
-            {/* Accounts Summary */}
-            {accounts.length > 0 && (
-              <View className="gap-2">
-                <View className="flex-row justify-between items-center">
-                  <Text className="text-sm font-semibold text-foreground">الحسابات</Text>
-                  <TouchableOpacity onPress={() => handleQuickAction("account")}>
-                    <Text className="text-xs text-primary">عرض الكل</Text>
-                  </TouchableOpacity>
-                </View>
-                <View className="gap-2">
-                  {accounts.slice(0, 3).map((account) => (
-                    <View
-                      key={account.id}
-                      className="flex-row justify-between items-center rounded-xl p-3 border border-border"
-                      style={{ backgroundColor: colors.surface }}
-                    >
-                      <View className="flex-1">
-                        <Text className="text-sm font-semibold text-foreground">
-                          {account.name}
-                        </Text>
-                        <Text className="text-xs text-muted mt-1">
-                          {account.type === "customer"
-                            ? "زبون"
-                            : account.type === "agent"
-                              ? "مندوب"
-                              : "شركة"}
-                        </Text>
-                      </View>
-                      <View className="items-end">
-                        <Text className="text-sm font-semibold text-foreground">
-                          {account.balance.toFixed(2)}
-                        </Text>
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
           </View>
         </View>
       </ScrollView>

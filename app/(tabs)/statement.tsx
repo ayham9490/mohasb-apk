@@ -1,146 +1,173 @@
-import { ScrollView, Text, View, TouchableOpacity, FlatList } from "react-native";
-import { useState } from "react";
+import { ScrollView, Text, View, TouchableOpacity, Dimensions } from "react-native";
+import { useState, useEffect } from "react";
 import * as Haptics from "expo-haptics";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
+import { generateTrialBalance, getAccounts } from "@/lib/accounting-storage";
+import type { TrialBalance, AccountClassification } from "@/lib/accounting-types";
 
-interface Transaction {
-  id: string;
-  account: string;
-  amount: number;
-  currency: string;
-  type: "for_us" | "for_them";
-  statement: string;
-  date: string;
-}
+const { width } = Dimensions.get("window");
 
 export default function StatementScreen() {
   const colors = useColors();
-  const [selectedCurrency, setSelectedCurrency] = useState<string>("ALL");
+  const [trialBalance, setTrialBalance] = useState<TrialBalance | null>(null);
+  const [accounts, setAccounts] = useState<AccountClassification[]>([]);
+  const [selectedFilter, setSelectedFilter] = useState<string>("all");
 
-  const transactions: Transaction[] = [
-    {
-      id: "1",
-      account: "أحمد محمد",
-      amount: 1000,
-      currency: "SYP",
-      type: "for_us",
-      statement: "دفعة أولى",
-      date: "2026-04-22",
-    },
-    {
-      id: "2",
-      account: "شركة النور",
-      amount: 5000,
-      currency: "USD",
-      type: "for_them",
-      statement: "مشتريات",
-      date: "2026-04-21",
-    },
-    {
-      id: "3",
-      account: "علي الحسن",
-      amount: 2500,
-      currency: "SYP",
-      type: "for_us",
-      statement: "دفعة ثانية",
-      date: "2026-04-20",
-    },
-    {
-      id: "4",
-      account: "فاطمة أحمد",
-      amount: 1500,
-      currency: "EUR",
-      type: "for_them",
-      statement: "مرتجعات",
-      date: "2026-04-19",
-    },
-  ];
+  useEffect(() => {
+    loadData();
+  }, []);
 
-  const currencies = ["ALL", "SYP", "USD", "EUR", "TRY"];
+  const loadData = async () => {
+    const trial = await generateTrialBalance();
+    const accs = await getAccounts();
+    setTrialBalance(trial);
+    setAccounts(accs);
+  };
 
-  const filteredTransactions =
-    selectedCurrency === "ALL"
-      ? transactions
-      : transactions.filter((tx) => tx.currency === selectedCurrency);
-
-  const handleExportPDF = () => {
+  const handleExport = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    // Trigger PDF export
+    console.log("Export trial balance");
   };
 
-  const handleShare = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // Share functionality will be implemented with proper file handling
-    console.log("Share statement");
+  const getAccountType = (accountId: string) => {
+    return accounts.find((a) => a.id === accountId)?.type || "unknown";
   };
 
-  const calculateTotal = () => {
-    return filteredTransactions.reduce((sum, tx) => {
-      return sum + (tx.type === "for_us" ? tx.amount : -tx.amount);
-    }, 0);
-  };
+  const filteredAccounts =
+    selectedFilter === "all"
+      ? trialBalance?.accounts || []
+      : (trialBalance?.accounts || []).filter((acc) => {
+          const type = getAccountType(acc.accountId);
+          return type === selectedFilter;
+        });
 
   return (
     <ScreenContainer className="p-0">
-      <View className="flex-1">
+      <ScrollView
+        contentContainerStyle={{ flexGrow: 1 }}
+        showsVerticalScrollIndicator={false}
+        className="flex-1"
+      >
         {/* Header */}
-        <View className="bg-gradient-to-b from-primary/20 to-transparent px-4 pt-4 pb-6">
-          <View className="gap-1 mb-4">
-            <Text className="text-3xl font-bold text-foreground">كشف الحساب</Text>
-            <Text className="text-sm text-muted">عرض المعاملات والتقارير</Text>
+        <View
+          className="px-4 pt-6 pb-4"
+          style={{
+            backgroundColor: colors.primary,
+          }}
+        >
+          <Text className="text-white text-sm font-semibold opacity-90">التقارير</Text>
+          <Text className="text-white text-3xl font-bold mt-1">ميزان المراجعة</Text>
+          <Text className="text-white/70 text-xs mt-2">
+            {trialBalance?.date}
+          </Text>
+        </View>
+
+        {/* Summary Cards */}
+        <View className="px-4 py-4 gap-3">
+          <View className="flex-row gap-3">
+            {/* Total Debit */}
+            <View
+              className="flex-1 rounded-2xl p-4 border border-border"
+              style={{
+                backgroundColor: colors.surface,
+              }}
+            >
+              <Text className="text-xs text-muted font-semibold mb-2">إجمالي المدين</Text>
+              <Text className="text-xl font-bold text-foreground">
+                {(trialBalance?.totalDebit || 0).toFixed(2)}
+              </Text>
+            </View>
+
+            {/* Total Credit */}
+            <View
+              className="flex-1 rounded-2xl p-4 border border-border"
+              style={{
+                backgroundColor: colors.surface,
+              }}
+            >
+              <Text className="text-xs text-muted font-semibold mb-2">إجمالي الدائن</Text>
+              <Text className="text-xl font-bold text-foreground">
+                {(trialBalance?.totalCredit || 0).toFixed(2)}
+              </Text>
+            </View>
           </View>
 
-          {/* Action Buttons */}
-          <View className="flex-row gap-2">
-            <TouchableOpacity
-              onPress={handleExportPDF}
-              style={{ backgroundColor: colors.primary, flex: 1 }}
-              className="rounded-lg p-3"
-            >
-              <Text className="text-white text-center font-semibold text-sm">
-                📥 تصدير PDF
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={handleShare}
-              style={{ backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, flex: 1 }}
-              className="rounded-lg p-3"
-            >
-              <Text className="text-foreground text-center font-semibold text-sm">
-                📤 مشاركة
-              </Text>
-            </TouchableOpacity>
+          {/* Balance Status */}
+          <View
+            className="rounded-2xl p-4 border border-border"
+            style={{
+              backgroundColor: colors.surface,
+            }}
+          >
+            <View className="flex-row justify-between items-center">
+              <Text className="text-sm text-muted">حالة التوازن</Text>
+              <View
+                className={`px-3 py-1 rounded-full ${
+                  Math.abs((trialBalance?.totalDebit || 0) - (trialBalance?.totalCredit || 0)) <
+                  0.01
+                    ? "bg-success/20"
+                    : "bg-error/20"
+                }`}
+              >
+                <Text
+                  className={`text-xs font-semibold ${
+                    Math.abs((trialBalance?.totalDebit || 0) - (trialBalance?.totalCredit || 0)) <
+                    0.01
+                      ? "text-success"
+                      : "text-error"
+                  }`}
+                >
+                  {Math.abs((trialBalance?.totalDebit || 0) - (trialBalance?.totalCredit || 0)) <
+                  0.01
+                    ? "متوازن"
+                    : "غير متوازن"}
+                </Text>
+              </View>
+            </View>
           </View>
         </View>
 
-        {/* Currency Filter */}
-        <View className="px-4 pt-4 pb-2">
-          <Text className="text-sm font-semibold text-foreground mb-2">تصفية حسب العملة</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="gap-2">
+        {/* Filter Buttons */}
+        <View className="px-4 py-2">
+          <Text className="text-sm font-semibold text-foreground mb-2">تصفية حسب النوع</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            className="gap-2"
+          >
             <View className="flex-row gap-2">
-              {currencies.map((curr) => (
+              {["all", "asset", "liability", "equity", "revenue", "expense"].map((filter) => (
                 <TouchableOpacity
-                  key={curr}
+                  key={filter}
                   onPress={() => {
-                    setSelectedCurrency(curr);
+                    setSelectedFilter(filter);
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   }}
                   style={{
-                    backgroundColor:
-                      selectedCurrency === curr ? colors.primary : colors.surface,
+                    backgroundColor: selectedFilter === filter ? colors.primary : colors.surface,
                     borderColor: colors.border,
                     borderWidth: 1,
                   }}
                   className="rounded-lg px-4 py-2"
                 >
                   <Text
-                    className="font-semibold text-sm"
+                    className="text-xs font-semibold"
                     style={{
-                      color: selectedCurrency === curr ? "white" : colors.foreground,
+                      color: selectedFilter === filter ? "white" : colors.foreground,
                     }}
                   >
-                    {curr === "ALL" ? "الكل" : curr}
+                    {filter === "all"
+                      ? "الكل"
+                      : filter === "asset"
+                      ? "أصول"
+                      : filter === "liability"
+                      ? "التزامات"
+                      : filter === "equity"
+                      ? "حقوق"
+                      : filter === "revenue"
+                      ? "إيرادات"
+                      : "مصروفات"}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -148,78 +175,73 @@ export default function StatementScreen() {
           </ScrollView>
         </View>
 
-        {/* Summary Card */}
-        <View className="px-4 pt-2 pb-4">
-          <View
-            className="rounded-xl p-4 border border-border"
-            style={{ backgroundColor: colors.surface }}
-          >
-            <Text className="text-xs text-muted mb-2">الإجمالي</Text>
-            <Text
-              className={`text-2xl font-bold ${
-                calculateTotal() >= 0 ? "text-success" : "text-error"
-              }`}
-            >
-              {calculateTotal() >= 0 ? "+" : ""}{calculateTotal().toFixed(2)}
-            </Text>
-            <Text className="text-xs text-muted mt-2">
-              {filteredTransactions.length} معاملة
-            </Text>
-          </View>
-        </View>
-
-        {/* Transactions List */}
-        <ScrollView
-          contentContainerStyle={{ flexGrow: 1 }}
-          showsVerticalScrollIndicator={false}
-          className="px-4"
-        >
-          {filteredTransactions.length > 0 ? (
-            <View className="gap-2 pb-4">
-              {filteredTransactions.map((transaction) => (
+        {/* Accounts List */}
+        <View className="px-4 py-4 pb-6">
+          {filteredAccounts.length > 0 ? (
+            <View className="gap-2">
+              {filteredAccounts.map((account, index) => (
                 <View
-                  key={transaction.id}
-                  className="rounded-xl p-4 border border-border"
-                  style={{ backgroundColor: colors.surface }}
+                  key={account.accountId}
+                  className="rounded-2xl p-4 border border-border"
+                  style={{
+                    backgroundColor: colors.surface,
+                  }}
                 >
-                  <View className="flex-row justify-between items-start mb-2">
+                  <View className="flex-row justify-between items-start mb-3">
                     <View className="flex-1">
-                      <Text className="text-base font-semibold text-foreground">
-                        {transaction.statement}
+                      <Text className="text-base font-bold text-foreground">
+                        {account.accountName}
                       </Text>
                       <Text className="text-xs text-muted mt-1">
-                        {transaction.account}
+                        الرمز: {account.accountCode}
                       </Text>
                     </View>
-                    <Text
-                      className={`text-lg font-bold ${
-                        transaction.type === "for_us" ? "text-success" : "text-error"
-                      }`}
-                    >
-                      {transaction.type === "for_us" ? "+" : "-"}
-                      {transaction.amount}
-                    </Text>
                   </View>
 
-                  <View className="border-t border-border pt-2 flex-row justify-between items-center">
-                    <Text className="text-xs text-muted">
-                      {transaction.date} • {transaction.currency}
-                    </Text>
-                    <Text className="text-xs text-muted">
-                      {transaction.type === "for_us" ? "لنا" : "لهم"}
-                    </Text>
+                  <View className="border-t border-border pt-3 gap-2">
+                    <View className="flex-row justify-between items-center">
+                      <Text className="text-xs text-muted">مدين</Text>
+                      <Text className="text-sm font-bold text-foreground">
+                        {account.debit.toFixed(2)}
+                      </Text>
+                    </View>
+                    <View className="flex-row justify-between items-center">
+                      <Text className="text-xs text-muted">دائن</Text>
+                      <Text className="text-sm font-bold text-foreground">
+                        {account.credit.toFixed(2)}
+                      </Text>
+                    </View>
+                    <View className="border-t border-border pt-2 flex-row justify-between items-center">
+                      <Text className="text-xs text-muted font-semibold">الرصيد</Text>
+                      <Text
+                        className="text-sm font-bold"
+                        style={{
+                          color:
+                            account.debit - account.credit >= 0
+                              ? colors.success
+                              : colors.error,
+                        }}
+                      >
+                        {(account.debit - account.credit).toFixed(2)}
+                      </Text>
+                    </View>
                   </View>
                 </View>
               ))}
             </View>
           ) : (
-            <View className="flex-1 items-center justify-center gap-4">
-              <Text className="text-4xl">📭</Text>
-              <Text className="text-base text-muted">لا توجد معاملات</Text>
+            <View
+              className="rounded-2xl p-8 items-center justify-center"
+              style={{
+                backgroundColor: colors.surface,
+              }}
+            >
+              <Text className="text-3xl mb-2">📭</Text>
+              <Text className="text-sm text-muted">لا توجد حسابات</Text>
             </View>
           )}
-        </ScrollView>
-      </View>
+        </View>
+      </ScrollView>
     </ScreenContainer>
   );
 }
